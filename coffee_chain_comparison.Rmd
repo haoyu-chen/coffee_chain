@@ -1,0 +1,549 @@
+---
+title:  |
+  | Starbucks Versus Tim Hortons:
+  | A Comparison of Accessibility
+author: "Hao Yu Chen, MSc"
+output: 
+  html_document:
+    toc: false
+    toc_float:
+      collapsed: true
+    number_sections: false
+    theme: flatly
+    highlight: tango
+    df_print: kable
+---
+<style type="text/css"> 
+.header-section-number {
+  display: none;
+}
+header .subtitle {
+  font-weight: bold;
+}
+body .main-container {
+  max-width: 1200px;
+  }
+body {
+  font-size: 14px;
+  counter-reset: counter-level-1;
+  }
+p {
+  line-height: 1.5em;
+  }
+table {
+  border: #2C3E50;
+}
+h1 { /* Header 1 */
+  text-align: center;
+  color: #1666ba;
+  font-size: 24px;
+  font-weight: bold;
+  }
+h1:not(.title) {
+  text-align: left;
+  counter-increment: counter-level-1;
+  counter-reset: counter-level-2;
+}
+h1:not(.title)::before{
+  content: counter(counter-level-1) ". ";
+}
+h2 { /* Header 2 */
+  color: #368ce7;
+  font-size: 20px;
+  font-weight: bold;
+  counter-increment: counter-level-2;
+  counter-reset: counter-level-3;
+  }
+h2:not(.subtitle)::before {
+  content: counter(counter-level-1) "." counter(counter-level-2) " ";
+}
+h3 { /* Header 3 */ 
+  color: #42586E;
+  font-size: 20px;
+  font-weight: bold;
+  counter-increment: counter-level-3;
+  }
+h3:not(.subtitle)::before {
+  content: counter(counter-level-1) "." counter(counter-level-2) "." counter(counter-level-3) " ";
+}
+caption {
+  color: #1666ba;
+  font-weight: bold;
+  font-size: 14px;
+}
+h4 {
+  text-align: center;
+}
+</style>
+
+```{r setup, include = F}
+knitr::opts_chunk$set(dev = c("png", "pdf"), echo = F, warning = F, message = F, fig.align = "center", fig.width = 8, dpi = 300, fig.retina = 2)
+#options(scipen = 999)
+
+library(data.table)
+library(tidyverse)
+library(ggplot2)
+library(kableExtra)
+library(RMySQL)
+library(sf)
+library(viridis)
+library(ggpubr)
+library(scales)
+library(coin)
+library(geosphere)
+
+table_counter <- 1
+figure_counter <- 1
+
+format_p <- function(p.col) {
+  p.input <- as.numeric(p.col)
+  p.output <- NULL
+  for (i in 1:length(p.col)) {
+    if (is.na(p.col[i])) {
+      p.int <- NA
+    } else if (p.col[i] < 0.01) {
+      p.int <- formatC(p.input[i], format = "e", digits = 1)
+    } else if (p.col[i] < 0.1) {
+      p.int <- formatC(p.input[i], format = "f", digits = 3)
+    } else {
+      p.int <- formatC(p.input[i], format = "f", digits = 2)
+    }
+    p.output <- c(p.output, p.int)
+  }
+  return(p.output)
+}
+format_freq <- function(freq_col) {
+  freq_input <- as.numeric(freq_col)
+  freq_output <- NULL
+  for (i in 1:length(freq_input)) {
+    if (is.na(freq_input[i])) {
+      freq_int <- NA
+    } else if (freq_input[i] < 0.01) {
+      freq_int <- formatC(freq_input[i], format = "e", digits = 1)
+    } else if (freq_input[i] < 0.1) {
+      freq_int <- formatC(freq_input[i], format = "f", digits = 3)
+    } else if (freq_input[i] < 0.99) {
+      freq_int <- formatC(freq_input[i], format = "f", digits = 2)
+    } else if (freq_input[i] < 0.999) {
+      freq_int <- formatC(freq_input[i], format = "f", digits = 4)
+    } else {
+      freq_int <- formatC(freq_input[i], format = "e", digits = 5)
+    }
+    freq_output <- c(freq_output, freq_int)
+  }
+  return(freq_output)
+}
+format_orci <- function(or, se) {
+  beta <- log(or, base = exp(1))
+  return(paste0(sprintf("%.2f", or), " (", sprintf("%.2f", exp(beta - qnorm(0.975) * se)), ", ", sprintf("%.2f", exp(beta + qnorm(0.975) * se)), ")"))
+}
+format_betaci <- function(beta, se) {
+  return(paste0(sprintf("%.2f", beta), " (", sprintf("%.2f", beta - qnorm(0.975) * se), ", ", sprintf("%.2f", beta + qnorm(0.975) * se), ")"))
+}
+```
+
+<br>
+
+# Premise
+
+Starbucks and Tim Hortons are two popular coffee chains at different price points. Are there differences in locations of their stores? What may be contributing factors?
+
+<!-- ```{r} -->
+<!-- mysql_db <- dbConnect(RMySQL::MySQL(), user = "root", dbname = "coffeechain", host = "localhost") -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- #starbucks -->
+<!-- starbucks_data <- dbReadTable(mysql_db, "starbucks_full") -->
+<!-- starbucks_data <- starbucks_data %>% mutate_at(vars(ends_with("rating")), list(~ if_else(. == 0, -9, .))) -->
+<!-- starbucks_data <- starbucks_data %>%  -->
+<!--   mutate_if(is.character, list(~ gsub("\xe9", "é", .))) %>%  -->
+<!--   mutate_if(is.character, list(~ gsub("\xfc\xbe\x8e\x86\x94\xbc", "è", .))) %>%  -->
+<!--   mutate_if(is.character, list(~ gsub("\xfc\xbe\x8d\x86\x98\xbc", "ô", .))) %>% -->
+<!--   mutate_if(is.character, list(~ gsub("\xfc\xbe\x8e\x96\x8c\xbc", "É", .))) -->
+
+<!-- #checking types -->
+<!-- ## park -->
+<!--   #table(starbucks_data$park_type) -->
+<!--   #starbucks_data %>% filter(park_type == "premise") %>% select(place_id, contains("park")) #1 dog park -->
+<!-- ## gas station -->
+<!--   #table(starbucks_data$gas_station_type) -->
+<!--   #starbucks_data %>% filter(gas_station_type == "convenience_store") %>% select(place_id, contains("gas_station")) #some returned the convenience store rating and not the gas station -->
+<!--   #also one gas station named Eva best place which doesn't seem like a real gas station so switching to the nearby gas station -->
+<!-- starbucks_data <- starbucks_data %>% mutate( -->
+<!--   gas_station_name = case_when(place_id %in% c("ChIJo_kkS-4ZyUwRqtgU0p-5yj0", "ChIJ0y_kHuEYyUwRXODZpHdeNdc", "ChIJAQhunVUYyUwR67g2CX-55Hc", "ChIJY8__fgsyVUAR3_6HQCpV7dw", "ChIJuyylWm0ayUwRT-hInyKLE_4", "ChIJm-sX_8gFyUwR8p6tqyZMlEA", "ChIJozipQ_8byUwRRz6i-dekSrE") ~ "Esso", TRUE ~ gas_station_name), -->
+<!--   gas_station_rating = case_when( -->
+<!--     place_id == "ChIJo_kkS-4ZyUwRqtgU0p-5yj0" ~ 3.8,  -->
+<!--     place_id == "ChIJ0y_kHuEYyUwRXODZpHdeNdc" ~ 3.9,  -->
+<!--     place_id == "ChIJAQhunVUYyUwR67g2CX-55Hc" ~ 4.1, -->
+<!--     place_id %in% c("ChIJY8__fgsyVUAR3_6HQCpV7dw", "ChIJuyylWm0ayUwRT-hInyKLE_4") ~ 3.7, -->
+<!--     place_id == "ChIJm-sX_8gFyUwR8p6tqyZMlEA" ~ 4.1, -->
+<!--     place_id == "ChIJozipQ_8byUwRRz6i-dekSrE" ~ 3.8, -->
+<!--     TRUE ~ gas_station_rating), -->
+<!--   gas_station_user_ratings_total = case_when( -->
+<!--     place_id == "ChIJo_kkS-4ZyUwRqtgU0p-5yj0" ~ as.integer(162), -->
+<!--     place_id == "ChIJ0y_kHuEYyUwRXODZpHdeNdc" ~ as.integer(272), -->
+<!--     place_id == "ChIJAQhunVUYyUwR67g2CX-55Hc" ~ as.integer(133), -->
+<!--     place_id %in% c("ChIJY8__fgsyVUAR3_6HQCpV7dw", "ChIJuyylWm0ayUwRT-hInyKLE_4") ~ as.integer(429), -->
+<!--     place_id == "ChIJm-sX_8gFyUwR8p6tqyZMlEA" ~ as.integer(93), -->
+<!--     place_id == "ChIJozipQ_8byUwRRz6i-dekSrE" ~ as.integer(484), -->
+<!--     TRUE ~ gas_station_user_ratings_total), -->
+<!--   gas_station_type = case_when(place_id %in% c("ChIJo_kkS-4ZyUwRqtgU0p-5yj0", "ChIJ0y_kHuEYyUwRXODZpHdeNdc", "ChIJAQhunVUYyUwR67g2CX-55Hc", "ChIJY8__fgsyVUAR3_6HQCpV7dw", "ChIJuyylWm0ayUwRT-hInyKLE_4", "ChIJm-sX_8gFyUwR8p6tqyZMlEA", "ChIJozipQ_8byUwRRz6i-dekSrE") ~ "gas_station", TRUE ~ gas_station_type), -->
+<!--   gas_station_place_id = case_when(place_id %in% c("ChIJo_kkS-4ZyUwRqtgU0p-5yj0", "ChIJ0y_kHuEYyUwRXODZpHdeNdc", "ChIJAQhunVUYyUwR67g2CX-55Hc", "ChIJY8__fgsyVUAR3_6HQCpV7dw", "ChIJuyylWm0ayUwRT-hInyKLE_4", "ChIJm-sX_8gFyUwR8p6tqyZMlEA", "ChIJozipQ_8byUwRRz6i-dekSrE") ~ "-9", TRUE ~ gas_station_place_id)) -->
+<!-- ## school -->
+<!--   #table(starbucks_data$school_type) -->
+<!--   #starbucks_data %>% filter(school_type %in% c("beauty_salon", "physiotherapist", "spa", "travel_agency")) %>% select(place_id, vicinity, contains("school")) -->
+<!--   starbucks_data <- starbucks_data <- starbucks_data %>% mutate( -->
+<!--     school_name = case_when( -->
+<!--       place_id %in% c("ChIJRdYHGmgayUwR7rL5_m0W5kQ", "ChIJFTLz02kayUwRCNGI5M8fiQY") ~ "The Villa Montessori", -->
+<!--       place_id == "ChIJ0y_kHuEYyUwRXODZpHdeNdc" ~ "St. Pierre Apotre", -->
+<!--       place_id == "ChIJmUZgzlIZyUwRU27zQtUw0iM" ~ "Coronary Elementary School", -->
+<!--       place_id == "ChIJ96dM2349yUwRsOhbF88zMnw" ~ "West Island College", -->
+<!--       place_id == "ChIJnYEY7HE8yUwRUS1c_qLKq-A" ~ "École Primaire Wilder Penfield", -->
+<!--       TRUE ~ school_name), -->
+<!--     school_vicinity = case_when( -->
+<!--       place_id %in% c("ChIJRdYHGmgayUwR7rL5_m0W5kQ", "ChIJFTLz02kayUwRCNGI5M8fiQY") ~ "1155 Rue Metcalfe, Montréal", -->
+<!--       place_id == "ChIJ0y_kHuEYyUwRXODZpHdeNdc" ~ "8550 Rue Clarke, Montréal", -->
+<!--       place_id == "ChIJmUZgzlIZyUwRU27zQtUw0iM" ~ "4810 Av. Van Horne, Montréal", -->
+<!--       place_id == "ChIJ96dM2349yUwRsOhbF88zMnw" ~ "851 Rue Tecumseh, Dollard-des-Ormeaux", -->
+<!--       place_id == "ChIJnYEY7HE8yUwRUS1c_qLKq-A" ~ "551 Av. Westminister, Dollard-des-Ormeaux", -->
+<!--       TRUE ~ school_vicinity), -->
+<!--     school_lat = case_when( -->
+<!--       place_id %in% c("ChIJRdYHGmgayUwR7rL5_m0W5kQ", "ChIJFTLz02kayUwRCNGI5M8fiQY") ~ 45.50014, -->
+<!--       place_id == "ChIJ0y_kHuEYyUwRXODZpHdeNdc" ~ 45.54019, -->
+<!--       place_id == "ChIJmUZgzlIZyUwRU27zQtUw0iM" ~ 45.49393, -->
+<!--       place_id == "ChIJ96dM2349yUwRsOhbF88zMnw" ~ 45.47895, -->
+<!--       place_id == "ChIJnYEY7HE8yUwRUS1c_qLKq-A" ~ 45.47254, -->
+<!--       TRUE ~ school_lat), -->
+<!--     school_lng = case_when( -->
+<!--       place_id %in% c("ChIJRdYHGmgayUwR7rL5_m0W5kQ", "ChIJFTLz02kayUwRCNGI5M8fiQY") ~ -73.56934, -->
+<!--       place_id == "ChIJ0y_kHuEYyUwRXODZpHdeNdc" ~ -73.63870, -->
+<!--       place_id == "ChIJmUZgzlIZyUwRU27zQtUw0iM" ~ -73.63667, -->
+<!--       place_id == "ChIJ96dM2349yUwRsOhbF88zMnw" ~ -73.81511, -->
+<!--       place_id == "ChIJnYEY7HE8yUwRUS1c_qLKq-A" ~ -73.84496, -->
+<!--       TRUE ~ school_lng), -->
+<!--     school_rating = case_when( -->
+<!--       place_id %in% c("ChIJRdYHGmgayUwR7rL5_m0W5kQ", "ChIJFTLz02kayUwRCNGI5M8fiQY") ~ -9, -->
+<!--       place_id == "ChIJ0y_kHuEYyUwRXODZpHdeNdc" ~ 4.8, -->
+<!--       place_id == "ChIJmUZgzlIZyUwRU27zQtUw0iM" ~ 3.6, -->
+<!--       place_id == "ChIJ96dM2349yUwRsOhbF88zMnw" ~ 3.9, -->
+<!--       place_id == "ChIJnYEY7HE8yUwRUS1c_qLKq-A" ~ 3.6, -->
+<!--       TRUE ~ school_rating), -->
+<!--     school_user_ratings_total = case_when( -->
+<!--       place_id %in% c("ChIJRdYHGmgayUwR7rL5_m0W5kQ", "ChIJFTLz02kayUwRCNGI5M8fiQY") ~ as.integer(-9), -->
+<!--       place_id == "ChIJ0y_kHuEYyUwRXODZpHdeNdc" ~ as.integer(11), -->
+<!--       place_id == "ChIJmUZgzlIZyUwRU27zQtUw0iM" ~ as.integer(10), -->
+<!--       place_id == "ChIJ96dM2349yUwRsOhbF88zMnw" ~ as.integer(21), -->
+<!--       place_id == "ChIJnYEY7HE8yUwRUS1c_qLKq-A" ~ as.integer(16), -->
+<!--       TRUE ~ school_user_ratings_total), -->
+<!--     school_type = case_when( -->
+<!--       place_id %in% c("ChIJRdYHGmgayUwR7rL5_m0W5kQ", "ChIJ0y_kHuEYyUwRXODZpHdeNdc", "ChIJFTLz02kayUwRCNGI5M8fiQY", "ChIJmUZgzlIZyUwRU27zQtUw0iM", "ChIJ96dM2349yUwRsOhbF88zMnw", "ChIJnYEY7HE8yUwRUS1c_qLKq-A") ~ "school", -->
+<!--       TRUE ~ school_type), -->
+<!--     school_place_id = case_when( -->
+<!--       place_id %in% c("ChIJRdYHGmgayUwR7rL5_m0W5kQ", "ChIJ0y_kHuEYyUwRXODZpHdeNdc", "ChIJFTLz02kayUwRCNGI5M8fiQY", "ChIJmUZgzlIZyUwRU27zQtUw0iM", "ChIJ96dM2349yUwRsOhbF88zMnw", "ChIJnYEY7HE8yUwRUS1c_qLKq-A") ~ "-9", -->
+<!--       TRUE ~ school_place_id)) -->
+<!-- ## train station -->
+<!--   #table(starbucks_data$train_station_type) #transit and train stations -->
+<!-- ## grocery -->
+<!--   #table(starbucks_data$grocery_type) -->
+<!-- ## subway station -->
+<!--   #table(starbucks_data$subway_type) -->
+
+<!-- #removing off-island shops and non-operational shops -->
+<!-- starbucks_data <- starbucks_data %>% mutate(city_province = str_sub(compound_code, 9)) %>% separate(city_province, into = c("city", NA), remove = F, sep = ",") -->
+<!-- starbucks_data <- starbucks_data %>% filter(city %in% c("Anjou", "Dollard-Des Ormeaux", "Dorval", "Kirkland", "Lasalle", "Montreal", "Mount Royal", "Pointe-Claire", "Saint-Laurent", "Verdun", "Westmount") & business_status == "OPERATIONAL") #dim 42 69 -->
+<!-- starbucks_data <- starbucks_data %>% filter(!grepl("^J", postal_code) & !grepl("H7T", postal_code)) #restaurants marked as vicinity montreal but are actually in brossard (J) or laval (H7T) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- #timhortons -->
+<!-- timhortons_data <- dbReadTable(mysql_db, "timhortons_full") -->
+<!-- timhortons_data <- timhortons_data %>% mutate_at(vars(ends_with("rating")), list(~ if_else(. == 0, -9, .))) -->
+<!-- timhortons_data <- timhortons_data %>%  -->
+<!--   mutate_if(is.character, list(~ gsub("\xe9", "é", .))) %>%  -->
+<!--   mutate_if(is.character, list(~ gsub("\xfc\xbe\x8e\x86\x94\xbc", "è", .))) %>%  -->
+<!--   mutate_if(is.character, list(~ gsub("\xfc\xbe\x8d\x86\x98\xbc", "ô", .))) %>% -->
+<!--   mutate_if(is.character, list(~ gsub("\xfc\xbe\x8e\x96\x8c\xbc", "É", .))) -->
+
+<!-- #checking types -->
+<!-- ## park -->
+<!--   #table(timhortons_data$park_type) -->
+<!--   #timhortons_data %>% filter(park_type == "florist" | park_type == "night_club") %>% select(place_id, vicinity, contains("park")) -->
+<!-- timhortons_data <- timhortons_data %>% mutate( -->
+<!--   park_name = case_when( -->
+<!--     place_id == "ChIJsYwQEdMbyUwRYbhoMWqFsvI" ~ "Parc Jeanne-Mance", -->
+<!--     place_id == "ChIJj-Bi5V4hyUwR0yEFZhWYJFc" ~ "-9", -->
+<!--     TRUE ~ park_name), -->
+<!--   park_vicinity = case_when( -->
+<!--     place_id == "ChIJsYwQEdMbyUwRYbhoMWqFsvI" ~ "4422 Av. de l'Esplanade, Montréal", -->
+<!--     place_id == "ChIJj-Bi5V4hyUwR0yEFZhWYJFc" ~ "-9", -->
+<!--     TRUE ~ park_vicinity), -->
+<!--   park_lat = case_when( -->
+<!--     place_id == "ChIJsYwQEdMbyUwRYbhoMWqFsvI" ~ 45.51791, -->
+<!--     place_id == "ChIJj-Bi5V4hyUwR0yEFZhWYJFc" ~ -9, -->
+<!--     TRUE ~ park_lat), -->
+<!--   park_lng = case_when( -->
+<!--     place_id == "ChIJsYwQEdMbyUwRYbhoMWqFsvI" ~ -73.58688, -->
+<!--     place_id == "ChIJj-Bi5V4hyUwR0yEFZhWYJFc" ~ -9, -->
+<!--     TRUE ~ park_lng), -->
+<!--   park_rating = case_when( -->
+<!--     place_id == "ChIJsYwQEdMbyUwRYbhoMWqFsvI" ~ 4.6, -->
+<!--     place_id == "ChIJj-Bi5V4hyUwR0yEFZhWYJFc" ~ -9, -->
+<!--     TRUE ~ park_rating), -->
+<!--   park_user_ratings_total = case_when( -->
+<!--     place_id == "ChIJsYwQEdMbyUwRYbhoMWqFsvI" ~ as.integer(4258), -->
+<!--     place_id == "ChIJj-Bi5V4hyUwR0yEFZhWYJFc" ~ as.integer(-9), -->
+<!--     TRUE ~ park_user_ratings_total), -->
+<!--   park_type = case_when( -->
+<!--     place_id == "ChIJsYwQEdMbyUwRYbhoMWqFsvI" ~ "park", -->
+<!--     place_id == "ChIJj-Bi5V4hyUwR0yEFZhWYJFc" ~ "-9", -->
+<!--     TRUE ~ park_type), -->
+<!--   park_place_id = case_when( -->
+<!--     place_id %in% c("ChIJsYwQEdMbyUwRYbhoMWqFsvI", "ChIJj-Bi5V4hyUwR0yEFZhWYJFc") ~ "-9", -->
+<!--     TRUE ~ park_place_id))   -->
+<!-- ## school -->
+<!--   #table(timhortons_data$school_type) -->
+<!--   #timhortons_data %>% filter(school_type == "electronics_store") %>% select(place_id, vicinity, contains("school")) -->
+<!-- timhortons_data <- timhortons_data <- timhortons_data %>% mutate( -->
+<!--   school_name = case_when( -->
+<!--     place_id == "ChIJk8AoE2AayUwR6goUOkj7fN0" ~ "École de technologie supérieure ÉTS", -->
+<!--     TRUE ~ school_name), -->
+<!--   school_vicinity = case_when( -->
+<!--     place_id == "ChIJk8AoE2AayUwR6goUOkj7fN0" ~ "1100 Rue Notre Dame O, Montréal", -->
+<!--     TRUE ~ school_vicinity), -->
+<!--   school_lat = case_when( -->
+<!--     place_id == "ChIJk8AoE2AayUwR6goUOkj7fN0" ~ 45.49516, -->
+<!--     TRUE ~ school_lat), -->
+<!--   school_lng = case_when( -->
+<!--     place_id == "ChIJk8AoE2AayUwR6goUOkj7fN0" ~ -73.56163, -->
+<!--     TRUE ~ school_lng), -->
+<!--   school_rating = case_when( -->
+<!--     place_id == "ChIJk8AoE2AayUwR6goUOkj7fN0" ~ 4.5, -->
+<!--     TRUE ~ school_rating), -->
+<!--   school_user_ratings_total = case_when( -->
+<!--     place_id == "ChIJk8AoE2AayUwR6goUOkj7fN0" ~ as.integer(426), -->
+<!--     TRUE ~ school_user_ratings_total), -->
+<!--   school_type = case_when( -->
+<!--     place_id == "ChIJk8AoE2AayUwR6goUOkj7fN0" ~ "school", -->
+<!--     TRUE ~ school_type), -->
+<!--   school_place_id = case_when( -->
+<!--     place_id == "ChIJk8AoE2AayUwR6goUOkj7fN0" ~ "-9", -->
+<!--     TRUE ~ school_place_id)) -->
+<!-- ## gas station -->
+<!--   #table(timhortons_data$gas_station_type) -->
+<!--   #timhortons_data %>% filter(gas_station_type == "convenience_store") %>% select(place_id, vicinity, contains("gas_station")) #some returned the convenience store rating and not the gas station -->
+<!--   #also one gas station named Eva best place which doesn't seem like a real gas station so switching to the nearby gas station -->
+<!-- timhortons_data <- timhortons_data %>% mutate( -->
+<!--   gas_station_name = case_when( -->
+<!--     place_id %in% c("ChIJaZGQhRIayUwR7d0IBt4rF0Y", "ChIJoxc_YW0ayUwR6-plIMIqWXo", "ChIJT-vbXaUQyUwRLV9SspgREF0", "ChIJOSxP4bkeyUwRmy-X71XBL5Q", "ChIJKU1h0qQbyUwR5pUvFH_Whjs", "ChIJcwJfWV8XyUwR_JXzZeayqEQ", "ChIJB9AJmVgXyUwRwRFzTebvHcw", "ChIJX_h5R_gYyUwRGuQooZFypU8") ~ "Esso",  -->
+<!--     TRUE ~ gas_station_name), -->
+<!--   gas_station_rating = case_when( -->
+<!--     place_id %in% c("ChIJaZGQhRIayUwR7d0IBt4rF0Y", "ChIJoxc_YW0ayUwR6-plIMIqWXo") ~ 3.7, -->
+<!--     place_id == "ChIJT-vbXaUQyUwRLV9SspgREF0" ~ 3.8, -->
+<!--     place_id == "ChIJOSxP4bkeyUwRmy-X71XBL5Q" ~ 4.0, -->
+<!--     place_id == "ChIJKU1h0qQbyUwR5pUvFH_Whjs" ~ 4.0, -->
+<!--     place_id == "ChIJcwJfWV8XyUwR_JXzZeayqEQ" ~ 3.6, -->
+<!--     place_id == "ChIJB9AJmVgXyUwRwRFzTebvHcw" ~ 4.0, -->
+<!--     place_id == "ChIJX_h5R_gYyUwRGuQooZFypU8" ~ 3.7, -->
+<!--     TRUE ~ gas_station_rating), -->
+<!--   gas_station_user_ratings_total = case_when( -->
+<!--     place_id %in% c("ChIJaZGQhRIayUwR7d0IBt4rF0Y", "ChIJoxc_YW0ayUwR6-plIMIqWXo") ~ as.integer(429), -->
+<!--     place_id == "ChIJT-vbXaUQyUwRLV9SspgREF0" ~ as.integer(241), -->
+<!--     place_id == "ChIJOSxP4bkeyUwRmy-X71XBL5Q" ~ as.integer(198), -->
+<!--     place_id == "ChIJKU1h0qQbyUwR5pUvFH_Whjs" ~ as.integer(186), -->
+<!--     place_id == "ChIJcwJfWV8XyUwR_JXzZeayqEQ" ~ as.integer(279), -->
+<!--     place_id == "ChIJB9AJmVgXyUwRwRFzTebvHcw" ~ as.integer(243), -->
+<!--     place_id == "ChIJX_h5R_gYyUwRGuQooZFypU8" ~ as.integer(176), -->
+<!--     TRUE ~ gas_station_user_ratings_total), -->
+<!--   gas_station_type = case_when( -->
+<!--     place_id %in% c("ChIJaZGQhRIayUwR7d0IBt4rF0Y", "ChIJoxc_YW0ayUwR6-plIMIqWXo", "ChIJT-vbXaUQyUwRLV9SspgREF0", "ChIJOSxP4bkeyUwRmy-X71XBL5Q", "ChIJKU1h0qQbyUwR5pUvFH_Whjs", "ChIJcwJfWV8XyUwR_JXzZeayqEQ", "ChIJB9AJmVgXyUwRwRFzTebvHcw", "ChIJX_h5R_gYyUwRGuQooZFypU8") ~ "gas_station",  -->
+<!--     TRUE ~ gas_station_type), -->
+<!--   gas_station_place_id = case_when( -->
+<!--     place_id %in% c("ChIJaZGQhRIayUwR7d0IBt4rF0Y", "ChIJoxc_YW0ayUwR6-plIMIqWXo", "ChIJT-vbXaUQyUwRLV9SspgREF0", "ChIJOSxP4bkeyUwRmy-X71XBL5Q", "ChIJKU1h0qQbyUwR5pUvFH_Whjs", "ChIJcwJfWV8XyUwR_JXzZeayqEQ", "ChIJB9AJmVgXyUwRwRFzTebvHcw", "ChIJX_h5R_gYyUwRGuQooZFypU8") ~ "-9",  -->
+<!--     TRUE ~ gas_station_place_id)) -->
+<!-- ## school -->
+<!--   #table(timhortons_data$school_type) -->
+<!-- ## train station -->
+<!--   #table(timhortons_data$train_station_type) #transit and train stations -->
+<!-- ## grocery -->
+<!--   #table(timhortons_data$grocery_type) -->
+<!--   #timhortons_data %>% filter(grocery_type == "convenience_store") %>% select(place_id, vicinity, contains("grocery")) #the "convenience store" looks to be an actual grocery store -->
+<!-- ## subway station -->
+<!--   #table(timhortons_data$subway_type) -->
+
+<!-- #removing off-island shops and non-operational shops -->
+<!-- timhortons_data <- timhortons_data %>% mutate(city_province = str_sub(compound_code, 9)) %>% separate(city_province, into = c("city", NA), remove = F, sep = ",", extra = "drop") #some extra QC listings -->
+<!-- timhortons_data <- timhortons_data %>% filter(city %in% c("Lachine", "Montreal", "Saint-Laurent", "Saint-Leonard") & business_status %in% c("OPERATIONAL", "CLOSED_TEMPORARILY")) #allowing closed temporarily since is not permanent #dim 67 69 -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- #creating fsa -->
+<!-- starbucks_data <- starbucks_data %>% mutate(fsa = substr(postal_code, 1, 3)) -->
+<!-- timhortons_data <- timhortons_data %>% mutate(fsa = substr(postal_code, 1, 3)) -->
+
+<!-- #reading in tax statistics -->
+<!-- income_tax_data <- fread("fsa_income_2018/quebec_total_income_all_returns.csv") %>% select(-V24, -V25) #individual tax statistics, total income -->
+<!-- income_tax_data <- income_tax_data %>% filter(Total != 0) %>% mutate(mean_income = `Total Income`/Total) #using mean because median is not reliable with 250000 and over column -->
+
+<!-- #merging with tax statistics -->
+<!-- starbucks_data <- starbucks_data %>% left_join(income_tax_data %>% select(FSA, mean_income), by = c("fsa" = "FSA")) #no H4Y (Dorval) in tax statistics -->
+<!-- timhortons_data <- timhortons_data %>% left_join(income_tax_data %>% select(FSA, mean_income), by = c("fsa" = "FSA")) -->
+
+<!-- #writing to file -->
+<!-- fwrite(starbucks_data, "~/Documents/Employment/Portfolio/starbucks_combined_data.csv") -->
+<!-- fwrite(timhortons_data, "~/Documents/Employment/Portfolio/timhortons_combined_data.csv") -->
+<!-- ``` -->
+
+```{r}
+starbucks_data <- fread("~/Documents/Employment/Portfolio/starbucks_combined_data.csv", na.strings = c("-9"))
+timhortons_data <- fread("~/Documents/Employment/Portfolio/timhortons_combined_data.csv", na.strings = c("-9"))
+coffee_data <- bind_rows(starbucks_data, timhortons_data)
+```
+
+```{r}
+#plot visuals
+starbucks_colour <- "#1B7462"
+
+theme_website <- function (base_size = 11, base_family = "", base_line_size = base_size/22, 
+    base_rect_size = base_size/22) {
+    theme_classic() %+replace% 
+        theme(legend.position = "bottom", plot.title = element_text(hjust = 0.5, face = "bold"), plot.margin = unit(c(0,0,0,0), "lines"), panel.grid.major.y = element_line(colour = "grey60", size = 0.2), line = element_blank(), rect = element_blank(), axis.line.x = element_line(colour = "black", size = 0.5), axis.ticks.x = element_line(colour = "grey30"), axis.ticks.length = unit(0.08, "cm"), axis.text = element_text(color = "grey30"), axis.title = element_text(colour = "black"), axis.title.y = element_text(angle = 90))
+}
+```
+
+<br>
+
+# Counts
+
+On the island of Montreal, there are `r nrow(starbucks_data)` Starbucks and `r nrow(timhortons_data)` Tim Hortons.
+
+# Location
+
+```{r, results = "hide"}
+#reading in geographic files
+boundaries <- st_read("~/Documents/Employment/Portfolio/gfsa000b11a_e/gfsa000b11a_e.shp") #reverting back to 2011 because 2016's orientation looked odd
+boundaries <- boundaries %>% filter(grepl("^H", CFSAUID) & !grepl("^H7", CFSAUID)) #keeping H8P and H8R because they contain parts of Lsalle as well as Kahnawake (for some reason)
+
+#creating counts
+starbucks_fsa_count <- starbucks_data %>% group_by(fsa) %>% summarise(n_starbucks = n())
+timhortons_fsa_count <- timhortons_data %>% group_by(fsa) %>% summarise(n_timhortons = n())
+boundaries <- boundaries %>% left_join(starbucks_fsa_count, by = c("CFSAUID" = "fsa")) %>% left_join(timhortons_fsa_count, by = c("CFSAUID" = "fsa"))# %>% mutate(n_starbucks = if_else(is.na(n_starbucks), as.integer(0), n_starbucks), n_timhortons = if_else(is.na(n_timhortons), as.integer(0), n_timhortons))
+boundaries <- st_make_valid(boundaries)
+boundaries_montreal <- st_crop(boundaries, xmin = -74.1, xmax = -73.4, ymin = 45.3, ymax = 45.8)
+```
+
+```{r}
+starbucks_fsa_map <- ggplot(boundaries_montreal) + geom_sf(aes(fill = factor(n_starbucks)), lwd = 0.2, colour = "grey20") + scale_fill_brewer("Number of Cafes", na.value = "white", palette = "Reds", breaks = c(1:4)) + theme_void() + theme(legend.position = "bottom", plot.title = element_text(hjust = 0.5, face = "bold"), plot.margin = unit(c(0,0,0,0), "lines")) + labs(title = "Starbucks")
+
+timhortons_fsa_map <- ggplot(boundaries_montreal) + geom_sf(aes(fill = factor(n_timhortons)), lwd = 0.2, colour = "grey20") + scale_fill_brewer("Number of Cafes", na.value = "white", palette = "Reds", breaks = c(1:4)) + theme_void() + theme(legend.position = "bottom", plot.title = element_text(hjust = 0.5, face = "bold"), plot.margin = unit(c(0,0,0,0), "lines")) + labs(title = "Tim Hortons")
+
+coffee_fsa_map <- ggarrange(starbucks_fsa_map, timhortons_fsa_map, common.legend = T, legend = "bottom")
+coffee_fsa_map
+#ggsave(coffee_fsa_map, device = "png", filename = "~/Documents/Employment/Portfolio/coffee_fsa_map.png", width = 8, height = 4)
+```
+
+# Popularity
+
+```{r}
+rating_p <- t.test(starbucks_data$rating, timhortons_data$rating, paired = F, alternative = "two.sided")$p.value
+```
+
+On average, Starbucks cafes were rated higher than Tim Hortons cafes (`r sprintf("%.1f", mean(starbucks_data$rating, na.rm = T))`/5 versus `r sprintf("%.1f", mean(timhortons_data$rating, na.rm = T))`/5, *p* for difference = `r sprintf("%.1e", rating_p)`).
+
+```{r}
+rating_data <- coffee_data %>% filter(!is.na(rating)) %>% group_by(name, rating) %>% summarise(n = n()) %>% mutate(proportion = n / sum(n))
+rating_data <- rating_data %>% ungroup() %>% add_row(name = "Starbucks", rating = 1, n = 0, proportion = 0) %>% add_row(name = "Starbucks", rating = 5, n = 0, proportion = 0)  %>% add_row(name = "Tim Hortons", rating = 1, n = 0, proportion = 0) %>% add_row(name = "Tim Hortons", rating = 2, n = 0, proportion = 0) %>% add_row(name = "Tim Hortons", rating = 5, n = 0, proportion = 0) %>% arrange(name, rating) 
+coffee_rating_proportion <- ggplot(rating_data, aes(x = rating, y = proportion, fill = name)) + geom_bar(stat = "identity", width = 0.6, position = position_dodge(width = 0.7)) + scale_y_continuous(expand = c(0, 0), labels = scales::percent, limits = c(0, 1.05)) + labs(x = "\n Google Maps Rating", y = "Percentage of Cafes\n") + scale_fill_manual("Coffee Chain", values = c("#0075A2", "#B8003A")) + theme_website()
+coffee_rating_proportion
+#ggsave(coffee_rating_proportion, device = "png", filename = "~/Documents/Employment/Portfolio/coffee_rating_proportion.png", width = 8, height = 4)
+```
+
+```{r}
+user_data <- coffee_data %>% filter(!is.na(user_ratings_total)) %>% group_by(name) %>% summarise(mean_users = mean(user_ratings_total))
+median_starbucks_ratings <- median(starbucks_data$user_ratings_total)
+median_timhortons_ratings <- median(timhortons_data$user_ratings_total)
+mood_test_ratings <- median_test(user_ratings_total ~ factor(name), coffee_data)
+```
+
+In contrast, Tim Hortons cafes were rated `r sprintf("%.2f", median_timhortons_ratings/median_starbucks_ratings)` times as often as Starbucks cafes (`r round(median_starbucks_ratings)` versus `r round(median_timhortons_ratings)`).
+
+```{r}
+coffee_ratings <- ggplot(coffee_data, aes(x = user_ratings_total, colour = name, fill = name)) + 
+  geom_density(aes(y = ..scaled..), alpha = 0.1) + 
+  scale_y_continuous(labels = percent) + labs(x = "\nNumber of Ratings", y = "Percentage of Cafes\n") + 
+  geom_segment(aes(x = median_starbucks_ratings, xend = median_starbucks_ratings, y = 0, yend = 1), size = 1.5, colour = "#0075A2") + 
+  geom_segment(aes(x = median_timhortons_ratings, xend = median_timhortons_ratings, y = 0, yend = 1), size = 1.5, colour = "#B8003A") + 
+  annotate("text", x = median_starbucks_ratings, y = 1.05, vjust = 1, hjust = 1, label = paste0("Median: ", round(median_starbucks_ratings)), colour = "#0075A2", fontface = 2) + 
+  annotate("text", x = median(timhortons_data$user_ratings_total), y = 1.05, vjust = 1, hjust = 0, label = paste0("Median: ", round(median(timhortons_data$user_ratings_total))), colour = "#B8003A", fontface = 2) + 
+  scale_colour_manual("Coffee Chain", values = c("#0075A2", "#B8003A")) + 
+  scale_fill_manual("Coffee Chain", values = c("#0075A2", "#B8003A")) + 
+  theme_website() + theme(plot.margin = unit(c(1,1,1,1), "lines")) + scale_x_continuous(expand = c(0, 0), labels = comma, limits = c(0, 1500), breaks = seq(0, 2000, by = 500))
+coffee_ratings
+#ggsave(coffee_ratings, device = "png", filename = "~/Documents/Employment/Portfolio/coffee_ratings.png", width = 8, height = 5)
+```
+
+# Proximity to Neighbourhood Features
+
+```{r}
+coffee_data <- coffee_data %>% rowwise() %>% mutate(
+  park_dist = distm(c(lng, lat), c(park_lng, park_lat), fun = distHaversine),
+  gas_station_dist = distm(c(lng, lat), c(gas_station_lng, gas_station_lat), fun = distHaversine),
+  school_dist = distm(c(lng, lat), c(school_lng, school_lat), fun = distHaversine),
+  train_station_dist = distm(c(lng, lat), c(train_station_lng, train_station_lat), fun = distHaversine),
+  grocery_dist = distm(c(lng, lat), c(grocery_lng, grocery_lat), fun = distHaversine),
+  mall_dist = distm(c(lng, lat), c(mall_lng, mall_lat), fun = distHaversine),
+  subway_dist = distm(c(lng, lat), c(subway_lng, subway_lat), fun = distHaversine)
+  ) %>% ungroup()
+dist_data <- coffee_data %>% group_by(name) %>% summarise(
+  mean_park_dist = mean(park_dist, na.rm = T),
+  mean_gas_station_dist = mean(gas_station_dist, na.rm = T),
+  mean_school_dist = mean(school_dist, na.rm = T),
+  mean_train_station_dist = mean(train_station_dist, na.rm = T),
+  mean_grocery_dist = mean(grocery_dist, na.rm = T),
+  mean_mall_dist = mean(mall_dist, na.rm = T),
+  mean_subway_dist = mean(subway_dist, na.rm = T)
+  )
+dist_long <- dist_data %>% pivot_longer(!name, names_to = "feature", values_to = "distance")
+dist_long <- dist_long %>% mutate(feature = factor(feature, levels = rev(c("mean_train_station_dist", "mean_subway_dist", "mean_mall_dist", "mean_grocery_dist", "mean_gas_station_dist", "mean_park_dist", "mean_school_dist"))))
+feature_labeller = c(
+  mean_park_dist = "Park",
+  mean_gas_station_dist = "Gas Station",
+  mean_school_dist = "School",
+  mean_train_station_dist = "Train Station",
+  mean_grocery_dist = "Grocery Store",
+  mean_mall_dist = "Mall",
+  mean_subway_dist = "Subway Station")
+feature_distance <- ggplot(dist_long %>% filter(!grepl("school", feature)), aes(x = feature, y = distance, fill = name)) + geom_bar(stat = "identity", width = 0.6, position = position_dodge(width = 0.7)) + scale_fill_manual("Coffee Chain", values = c("#0075A2", "#B8003A")) + theme_website() + scale_y_continuous(labels = comma) + scale_x_discrete(labels = feature_labeller) + theme(panel.grid.major.y = element_blank(), panel.grid.major.x = element_line(colour = "grey60", size = 0.2), plot.margin = unit(c(1,1,1,1), "lines")) + labs(y = "\nDistance (m)", x = "Feature\n") + geom_text(aes(x = feature, y = distance - 10, label = prettyNum(big.mark = ",", round(distance)), group = name), hjust = 1, size = 3, position = position_dodge(width = 0.7), colour = "white") + coord_flip()
+feature_distance
+#ggsave(feature_distance, device = "png", filename = "~/Documents/Employment/Portfolio/feature_distance.png", width = 8, height = 4)
+```
+
+# Neighbourhood Features as Predictors of Cafe Popularity
+
+```{r}
+starbucks_dist_lm <- lm(rating ~ park_dist + gas_station_dist + grocery_dist, data = coffee_data %>% filter(name == "Starbucks")) #removing train and subway because led to high missingness (34/40 missing) #removing ratings and number of ratings because of low sample size #also removed malls due to missingness
+#summary(starbucks_dist_lm) #grocery store significant (p = 0.032)
+
+starbucks_rating_lm <- lm(rating ~ park_rating + gas_station_rating + grocery_rating, data = coffee_data %>% filter(name == "Starbucks"))
+#summary(starbucks_rating_lm) #nothing
+```
+
+```{r}
+timhortons_dist_lm <- lm(rating ~ park_dist + gas_station_dist + grocery_dist, data = coffee_data %>% filter(name == "Tim Hortons"))
+#summary(timhortons_dist_lm) #nothing
+
+timhortons_rating_lm <- lm(rating ~ park_rating + gas_station_rating + grocery_rating, data = coffee_data %>% filter(name == "Tim Hortons"))
+#summary(timhortons_rating_lm) #nothing
+```
+
+# Data Sources
+
+* <a href="https://developers.google.com/maps/documentation" target = "_blank">Google Maps API</a>: rating and location of coffee shops; location of nearby amenities
+
+* <a href="https://www12.statcan.gc.ca/census-recensement/2011/geo/bound-limit/bound-limit-2016-eng.cfm" target = "_blank">Statistics Canada</a>: cartographic boundaries of Montreal
+
+* <a href="https://www.canada.ca/en/revenue-agency/programs/about-canada-revenue-agency-cra/income-statistics-gst-hst-statistics/individual-tax-statistics-fsa/individual-tax-statistics-fsa-2020-edition-2018-tax-year.html" target = "_blank">Canada Revenue Agency</a>: income tax statistics
+
+<!-- ```{r} -->
+<!-- kable(TABLE, align = "lrllccrcr", "html", caption = paste0("Table ", table_counter, ". TITLE."), table.attr = "style='width:100%;'") %>% kable_styling(c("bordered", "striped", "responsive")) -->
+<!-- ``` -->
